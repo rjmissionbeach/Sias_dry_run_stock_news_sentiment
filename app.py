@@ -153,3 +153,24 @@ if news:
         price_clean["date"] = price_clean["date"].dt.date
 
         st.write("Trading days retrieved:", len(price_clean))
+
+        daily_sentiment = (
+            sentiment_df
+            .groupby("date", as_index=False)
+            .agg(
+                avg_sentiment=("score", "mean"),
+                article_count=("score", "size")
+            )
+        )
+
+        trading_date_list = sorted(price_clean["date"])
+
+        def next_trading_day(news_date):
+            for trading_date in trading_date_list:
+                if trading_date >= news_date:
+                    return trading_date
+            return None
+
+        daily_sentiment["aligned_date"] = (
+            daily_sentiment["date"].apply(next_trading_day)
+        )
