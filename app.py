@@ -99,5 +99,28 @@ if news:
         .head(article_limit)
     )
 
+        if st.button("Analyze sentiment"):
+        results = []
+
+        for _, article in selected_df.iterrows():
+            sentiment = score_sentiment(
+                article["headline"],
+                article["summary"],
+                ticker
+            )
+
+            results.append({
+                "date": article["date"],
+                "headline": article["headline"],
+                "source": article["source"],
+                "score": sentiment["score"],
+                "label": sentiment["label"]
+            })
+
+        sentiment_df = pd.DataFrame(results)
+
+        st.write("Articles scored:", len(sentiment_df))
+        st.dataframe(sentiment_df.head())
+
     st.write("Articles selected:", len(selected_df))
     st.write("News dates represented:", selected_df["date"].nunique())
