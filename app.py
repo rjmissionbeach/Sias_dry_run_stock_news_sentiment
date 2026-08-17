@@ -99,7 +99,10 @@ if news:
         .head(article_limit)
     )
 
-        if st.button("Analyze sentiment"):
+    st.write("Articles selected:", len(selected_df))
+    st.write("News dates represented:", selected_df["date"].nunique())
+
+    if st.button("Analyze sentiment"):
         results = []
 
         for _, article in selected_df.iterrows():
@@ -121,6 +124,3 @@ if news:
 
         st.write("Articles scored:", len(sentiment_df))
         st.dataframe(sentiment_df.head())
-
-    st.write("Articles selected:", len(selected_df))
-    st.write("News dates represented:", selected_df["date"].nunique())
