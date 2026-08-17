@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import yfinance as yf
+import matplotlib.pyplot as plt
 import json
 from datetime import date, timedelta, datetime
 
@@ -49,7 +50,10 @@ def score_sentiment(headline, summary, ticker):
 
 st.title("Stock News Sentiment Analyzer")
 
-ticker = st.text_input("Enter a ticker:", value="AAPL").upper()
+ticker = st.text_input(
+    "Enter a ticker:",
+    value="AAPL"
+).upper()
 
 article_limit = st.slider(
     "Number of articles to analyze",
@@ -74,103 +78,346 @@ headers = {
     "X-Finnhub-Token": FINNHUB_API_KEY
 }
 
-response = requests.get(url, params=params, headers=headers)
+response = requests.get(
+    url,
+    params=params,
+    headers=headers
+)
+
 news = response.json()
 
-st.write("Finnhub status code:", response.status_code)
-st.write("Articles returned:", len(news))
+if response.status_code != 200:
+    st.error("Finnhub news request failed.")
+    st.stop()
 
-st.write("Finnhub key loaded:", bool(FINNHUB_API_KEY))
-st.write("Ticker entered:", ticker)
-st.write("Articles requested:", article_limit)
-st.write("OpenRouter key loaded:", bool(OPENROUTER_API_KEY))
-
-if news:
-    news_df = pd.DataFrame(news)
-
-    news_df["date"] = news_df["datetime"].apply(
-        lambda x: datetime.fromtimestamp(x).date()
+if not news:
+    st.warning(
+        f"No recent Finnhub news was found for {ticker}."
     )
+    st.stop()
 
-    selected_parts = []
 
-    for _, group in news_df.groupby("date"):
-        n = min(len(group), 3)
-        selected_parts.append(
-            group.sample(n=n, random_state=42)
+news_df = pd.DataFrame(news)
+
+news_df["date"] = news_df["datetime"].apply(
+    lambda x: datetime.fromtimestamp(x).date()
+)
+
+selected_parts = []
+
+for _, group in news_df.groupby("date"):
+    n = min(len(group), 3)
+
+    selected_parts.append(
+        group.sample(
+            n=n,
+            random_state=42
         )
-
-    selected_df = (
-        pd.concat(selected_parts)
-        .sort_values("date")
-        .head(article_limit)
     )
 
-    st.write("Articles selected:", len(selected_df))
-    st.write("News dates represented:", selected_df["date"].nunique())
+selected_df = (
+    pd.concat(selected_parts)
+    .sort_values("date")
+    .head(article_limit)
+)
 
-    if st.button("Analyze sentiment"):
-        results = []
+st.write(
+    f"Finnhub returned **{len(news)} articles** "
+    f"from **{news_df['date'].min()}** "
+    f"through **{news_df['date'].max()}**."
+)
+
+st.write(
+    f"Analyzing **{len(selected_df)} articles** "
+    f"across **{selected_df['date'].nunique()} news dates**."
+)
+
+
+if st.button("Analyze sentiment"):
+
+    results = []
+
+    with st.spinner("Scoring news sentiment..."):
 
         for _, article in selected_df.iterrows():
-            sentiment = score_sentiment(
-                article["headline"],
-                article["summary"],
-                ticker
-            )
 
-            results.append({
-                "date": article["date"],
-                "headline": article["headline"],
-                "source": article["source"],
-                "score": sentiment["score"],
-                "label": sentiment["label"]
-            })
+            try:
+                sentiment = score_sentiment(
+                    article["headline"],
+                    article["summary"],
+                    ticker
+                )
 
-        sentiment_df = pd.DataFrame(results)
+                results.append({
+                    "date": article["date"],
+                    "headline": article["headline"],
+                    "source": article["source"],
+                    "url": article["url"],
+                    "score": float(sentiment["score"]),
+                    "label": sentiment["label"].lower()
+                })
 
-        st.write("Articles scored:", len(sentiment_df))
-        st.dataframe(sentiment_df.head())
+            except Exception as e:
+                st.warning(
+                    f"One article could not be scored: {e}"
+                )
 
-        sentiment_counts = (
-            sentiment_df["label"]
-            .value_counts()
-            .reindex(["negative", "neutral", "positive"], fill_value=0)
+    sentiment_df = pd.DataFrame(results)
+
+    if sentiment_df.empty:
+        st.error("No articles could be scored.")
+        st.stop()
+
+    # -----------------------------
+    # Sentiment distribution
+    # -----------------------------
+
+    sentiment_counts = (
+        sentiment_df["label"]
+        .value_counts()
+        .reindex(
+            ["negative", "neutral", "positive"],
+            fill_value=0
+        )
+    )
+
+    st.subheader("Sentiment Distribution")
+
+    st.bar_chart(sentiment_counts)
+
+    # -----------------------------
+    # Price data
+    # -----------------------------
+
+    price_df = yf.download(
+        ticker,
+        start=start_date.isoformat(),
+        end=(end_date + timedelta(days=1)).isoformat(),
+        progress=False,
+        auto_adjust=True
+    )
+
+    if price_df.empty:
+        st.error("No price data could be retrieved.")
+        st.stop()
+
+    price_clean = price_df["Close"].reset_index()
+    price_clean.columns = ["date", "close"]
+
+    price_clean["date"] = (
+        pd.to_datetime(price_clean["date"]).dt.date
+    )
+
+    price_clean["next_close"] = (
+        price_clean["close"].shift(-1)
+    )
+
+    # -----------------------------
+    # Daily sentiment
+    # -----------------------------
+
+    daily_sentiment = (
+        sentiment_df
+        .groupby("date", as_index=False)
+        .agg(
+            avg_sentiment=("score", "mean"),
+            article_count=("score", "size")
+        )
+    )
+
+    trading_dates = sorted(price_clean["date"])
+
+    def next_trading_day(news_date):
+        for trading_date in trading_dates:
+            if trading_date >= news_date:
+                return trading_date
+        return None
+
+    daily_sentiment["aligned_date"] = (
+        daily_sentiment["date"].apply(
+            next_trading_day
+        )
+    )
+
+    daily_sentiment = daily_sentiment.dropna(
+        subset=["aligned_date"]
+    )
+
+    daily_sentiment["weighted_sentiment"] = (
+        daily_sentiment["avg_sentiment"]
+        * daily_sentiment["article_count"]
+    )
+
+    aligned_sentiment = (
+        daily_sentiment
+        .groupby("aligned_date", as_index=False)
+        .agg(
+            weighted_sum=("weighted_sentiment", "sum"),
+            article_count=("article_count", "sum")
+        )
+    )
+
+    aligned_sentiment["avg_sentiment"] = (
+        aligned_sentiment["weighted_sum"]
+        / aligned_sentiment["article_count"]
+    )
+
+    # -----------------------------
+    # Hit rate
+    # -----------------------------
+
+    evaluation = aligned_sentiment.merge(
+        price_clean,
+        left_on="aligned_date",
+        right_on="date",
+        how="left"
+    )
+
+    evaluation["forward_return"] = (
+        evaluation["next_close"]
+        / evaluation["close"]
+        - 1
+    )
+
+    evaluation["hit"] = pd.NA
+
+    valid = (
+        evaluation["forward_return"].notna()
+        & (evaluation["avg_sentiment"] != 0)
+    )
+
+    evaluation.loc[valid, "hit"] = (
+        (
+            (evaluation.loc[valid, "avg_sentiment"] > 0)
+            &
+            (evaluation.loc[valid, "forward_return"] > 0)
+        )
+        |
+        (
+            (evaluation.loc[valid, "avg_sentiment"] < 0)
+            &
+            (evaluation.loc[valid, "forward_return"] < 0)
+        )
+    )
+
+    evaluable = evaluation[
+        evaluation["hit"].notna()
+    ].copy()
+
+    st.subheader("Directional Hit Rate")
+
+    if len(evaluable) > 0:
+
+        hit_rate = evaluable["hit"].mean()
+
+        st.metric(
+            "Sentiment Direction Hit Rate",
+            f"{hit_rate:.1%}"
         )
 
-        st.subheader("Sentiment Distribution")
-        st.bar_chart(sentiment_counts)
-
-        price_df = yf.download(
-            ticker,
-            start=start_date.isoformat(),
-            end=(end_date + timedelta(days=1)).isoformat(),
-            progress=False
+        st.caption(
+            f"Based on {len(evaluable)} evaluable "
+            f"trading-day sentiment signal(s). "
+            f"Neutral signals and days without a "
+            f"subsequent closing price are excluded."
         )
 
-        price_clean = price_df["Close"].reset_index()
-        price_clean.columns = ["date", "close"]
-        price_clean["date"] = price_clean["date"].dt.date
-
-        st.write("Trading days retrieved:", len(price_clean))
-
-        daily_sentiment = (
-            sentiment_df
-            .groupby("date", as_index=False)
-            .agg(
-                avg_sentiment=("score", "mean"),
-                article_count=("score", "size")
-            )
+    else:
+        st.warning(
+            "There are not enough evaluable "
+            "directional signals to calculate a hit rate."
         )
 
-        trading_date_list = sorted(price_clean["date"])
+    # -----------------------------
+    # Price + sentiment chart
+    # -----------------------------
 
-        def next_trading_day(news_date):
-            for trading_date in trading_date_list:
-                if trading_date >= news_date:
-                    return trading_date
-            return None
+    timeline = price_clean.merge(
+        aligned_sentiment[
+            ["aligned_date", "avg_sentiment"]
+        ],
+        left_on="date",
+        right_on="aligned_date",
+        how="left"
+    )
 
-        daily_sentiment["aligned_date"] = (
-            daily_sentiment["date"].apply(next_trading_day)
-        )
+    st.subheader("Price and Sentiment Timeline")
+
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+
+    ax1.plot(
+        timeline["date"],
+        timeline["close"],
+        linewidth=2
+    )
+
+    ax1.set_xlabel("Date")
+    ax1.set_ylabel("Closing Price")
+    ax1.tick_params(
+        axis="x",
+        rotation=45
+    )
+
+    ax2 = ax1.twinx()
+
+    ax2.plot(
+        timeline["date"],
+        timeline["avg_sentiment"],
+        marker="o",
+        linestyle="--",
+        linewidth=2
+    )
+
+    ax2.axhline(
+        0,
+        linewidth=1,
+        linestyle=":"
+    )
+
+    ax2.set_ylabel("Average Sentiment")
+    ax2.set_ylim(-1, 1)
+
+    plt.title(
+        f"{ticker}: Price and News Sentiment"
+    )
+
+    fig.tight_layout()
+
+    st.pyplot(fig)
+
+    # -----------------------------
+    # Article list
+    # -----------------------------
+
+    st.subheader("Analyzed News Articles")
+
+    article_display = sentiment_df[
+        [
+            "date",
+            "headline",
+            "source",
+            "score",
+            "label"
+        ]
+    ].sort_values(
+        "date",
+        ascending=False
+    )
+
+    st.dataframe(
+        article_display,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # -----------------------------
+    # Limitations
+    # -----------------------------
+
+    st.caption(
+        "Sentiment scores are AI-generated judgments, "
+        "not calibrated probabilities. News coverage may "
+        "not span the entire requested 30-day window, and "
+        "the directional hit rate can be based on a small "
+        "number of trading-day observations."
+    )
