@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import yfinance as yf
 from datetime import date, timedelta, datetime
+FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
 
 st.title("Stock News Sentiment Analyzer")
 
@@ -16,5 +17,6 @@ article_limit = st.slider(
     step=5
 )
 
+st.write("Finnhub key loaded:", bool(FINNHUB_API_KEY))
 st.write("Ticker entered:", ticker)
 st.write("Articles requested:", article_limit)
