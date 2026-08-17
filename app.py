@@ -2,9 +2,43 @@ import streamlit as st
 import requests
 import pandas as pd
 import yfinance as yf
+import json
 from datetime import date, timedelta, datetime
+
 FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
 OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+
+model = "nvidia/nemotron-3-super-120b-a12b:free"
+
+
+def score_sentiment(headline, summary, ticker):
+    prompt = f"""
+    Score the sentiment of this stock-news article for {ticker}.
+
+    Return only JSON with:
+    - score: a number from -1 to +1
+    - label: positive, neutral, or negative
+
+    Headline: {headline}
+    Summary: {summary}
+    """
+
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0
+        }
+    )
+
+    content = response.json()["choices"][0]["message"]["content"]
+    return json.loads(content)
+
 
 st.title("Stock News Sentiment Analyzer")
 
