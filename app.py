@@ -87,16 +87,17 @@ if news:
 
     selected_parts = []
 
-for _, group in news_df.groupby("date"):
-    n = min(len(group), 3)
-    selected_parts.append(
-        group.sample(n=n, random_state=42)
+    for _, group in news_df.groupby("date"):
+        n = min(len(group), 3)
+        selected_parts.append(
+            group.sample(n=n, random_state=42)
+        )
+
+    selected_df = (
+        pd.concat(selected_parts)
+        .sort_values("date")
+        .head(article_limit)
     )
 
-selected_df = (
-    pd.concat(selected_parts)
-    .sort_values("date")
-    .head(article_limit)
-)
     st.write("Articles selected:", len(selected_df))
     st.write("News dates represented:", selected_df["date"].nunique())
