@@ -4,6 +4,7 @@ import pandas as pd
 import yfinance as yf
 from datetime import date, timedelta, datetime
 FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
+OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
 
 st.title("Stock News Sentiment Analyzer")
 
@@ -41,3 +42,4 @@ st.write("Articles returned:", len(news))
 st.write("Finnhub key loaded:", bool(FINNHUB_API_KEY))
 st.write("Ticker entered:", ticker)
 st.write("Articles requested:", article_limit)
+st.write("OpenRouter key loaded:", bool(OPENROUTER_API_KEY))
