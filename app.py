@@ -17,6 +17,27 @@ article_limit = st.slider(
     step=5
 )
 
+end_date = date.today()
+start_date = end_date - timedelta(days=30)
+
+url = "https://finnhub.io/api/v1/company-news"
+
+params = {
+    "symbol": ticker,
+    "from": start_date.isoformat(),
+    "to": end_date.isoformat()
+}
+
+headers = {
+    "X-Finnhub-Token": FINNHUB_API_KEY
+}
+
+response = requests.get(url, params=params, headers=headers)
+news = response.json()
+
+st.write("Finnhub status code:", response.status_code)
+st.write("Articles returned:", len(news))
+
 st.write("Finnhub key loaded:", bool(FINNHUB_API_KEY))
 st.write("Ticker entered:", ticker)
 st.write("Articles requested:", article_limit)
