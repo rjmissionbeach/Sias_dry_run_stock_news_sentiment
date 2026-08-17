@@ -85,14 +85,18 @@ if news:
         lambda x: datetime.fromtimestamp(x).date()
     )
 
-    selected_df = (
-        news_df
-        .groupby("date", group_keys=False)
-        .sample(n=3, replace=False, random_state=42)
-        .sort_values("date")
+    selected_parts = []
+
+for _, group in news_df.groupby("date"):
+    n = min(len(group), 3)
+    selected_parts.append(
+        group.sample(n=n, random_state=42)
     )
 
-    selected_df = selected_df.head(article_limit)
-
+selected_df = (
+    pd.concat(selected_parts)
+    .sort_values("date")
+    .head(article_limit)
+)
     st.write("Articles selected:", len(selected_df))
     st.write("News dates represented:", selected_df["date"].nunique())
