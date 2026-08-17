@@ -133,3 +133,25 @@ if news:
 
         st.subheader("Sentiment Distribution")
         st.bar_chart(sentiment_counts)
+
+        sentiment_counts = (
+            sentiment_df["label"]
+            .value_counts()
+            .reindex(["negative", "neutral", "positive"], fill_value=0)
+        )
+
+        st.subheader("Sentiment Distribution")
+        st.bar_chart(sentiment_counts)
+
+        price_df = yf.download(
+            ticker,
+            start=start_date.isoformat(),
+            end=(end_date + timedelta(days=1)).isoformat(),
+            progress=False
+        )
+
+        price_clean = price_df["Close"].reset_index()
+        price_clean.columns = ["date", "close"]
+        price_clean["date"] = price_clean["date"].dt.date
+
+        st.write("Trading days retrieved:", len(price_clean))
