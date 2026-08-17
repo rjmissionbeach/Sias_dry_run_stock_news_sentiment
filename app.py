@@ -134,15 +134,6 @@ if news:
         st.subheader("Sentiment Distribution")
         st.bar_chart(sentiment_counts)
 
-        sentiment_counts = (
-            sentiment_df["label"]
-            .value_counts()
-            .reindex(["negative", "neutral", "positive"], fill_value=0)
-        )
-
-        st.subheader("Sentiment Distribution")
-        st.bar_chart(sentiment_counts)
-
         price_df = yf.download(
             ticker,
             start=start_date.isoformat(),
