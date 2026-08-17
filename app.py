@@ -124,3 +124,12 @@ if news:
 
         st.write("Articles scored:", len(sentiment_df))
         st.dataframe(sentiment_df.head())
+
+        sentiment_counts = (
+            sentiment_df["label"]
+            .value_counts()
+            .reindex(["negative", "neutral", "positive"], fill_value=0)
+        )
+
+        st.subheader("Sentiment Distribution")
+        st.bar_chart(sentiment_counts)
