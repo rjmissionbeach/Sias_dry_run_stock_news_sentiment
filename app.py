@@ -36,7 +36,14 @@ def score_sentiment(headline, summary, ticker):
         }
     )
 
-    content = response.json()["choices"][0]["message"]["content"]
+    data = response.json()
+
+    if response.status_code != 200 or "choices" not in data:
+        raise RuntimeError(
+            f"OpenRouter error {response.status_code}: {data}"
+        )
+
+    content = data["choices"][0]["message"]["content"]
     return json.loads(content)
 
 
