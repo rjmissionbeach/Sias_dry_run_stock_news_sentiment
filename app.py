@@ -78,4 +78,21 @@ st.write("Ticker entered:", ticker)
 st.write("Articles requested:", article_limit)
 st.write("OpenRouter key loaded:", bool(OPENROUTER_API_KEY))
 
+if news:
+    news_df = pd.DataFrame(news)
 
+    news_df["date"] = news_df["datetime"].apply(
+        lambda x: datetime.fromtimestamp(x).date()
+    )
+
+    selected_df = (
+        news_df
+        .groupby("date", group_keys=False)
+        .sample(n=3, replace=False, random_state=42)
+        .sort_values("date")
+    )
+
+    selected_df = selected_df.head(article_limit)
+
+    st.write("Articles selected:", len(selected_df))
+    st.write("News dates represented:", selected_df["date"].nunique())
