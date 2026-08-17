@@ -78,15 +78,4 @@ st.write("Ticker entered:", ticker)
 st.write("Articles requested:", article_limit)
 st.write("OpenRouter key loaded:", bool(OPENROUTER_API_KEY))
 
-if news and st.button("Test sentiment on one article"):
-    article = news[0]
 
-    sentiment = score_sentiment(
-        article["headline"],
-        article["summary"],
-        ticker
-    )
-
-    st.write("Headline:", article["headline"])
-    st.write("Sentiment score:", sentiment["score"])
-    st.write("Sentiment label:", sentiment["label"])
